@@ -62,6 +62,11 @@
 
 #define MAX_TCP_SESSION_CONNECTION_STORAGE 100
 
+/* Dennis details */
+
+#define TCP_SYN 55
+#define TCP_FIN 56
+
 /*Packet Information Array Location */
 #define IP_HDR_LEN_LOC 14 /*IP Packet header Length */
 #define TCP_TYPE_LOC 23 /*TCP packet type */
@@ -347,14 +352,15 @@ void ip_address_change(char* in_filename, char* output_filename)
 }
 
 
-
+unsigned int tempArray[2] = {0};
+int i = 0;
 void tcp_analysis(char *in_filename, char *out_filename)
 {
     //
     // Problem 2:
     //
-	printf("You need to add your code here for Problem 2\n");
-	printf("You may add more supporting functions if needed, but keep this function name unmodified.\n");
+	//printf("You need to add your code here for Problem 2\n");
+	//printf("You may add more supporting functions if needed, but keep this function name unmodified.\n");
 
 
 	///// Instruction //////
@@ -363,33 +369,78 @@ void tcp_analysis(char *in_filename, char *out_filename)
 	////////////////////////
 	//
 	// When you create an outputfile, write following two lines first and then start writing each TCP session informatin per line.
-	// TCP_session_count, serverIP, clientIP, serverPort, clientPort, num_of_packetSent(server->client), TotalIPtrafficBytesSent(server->client), TotaluserTrafficBytesSent(server->client), sessionDuration, bps_IPlayerThroughput(server->client), bps_Goodput(server->client)
-	// =========================================================================================================================
-
+	
+    
+    char txt_header[] = "TCP_session_count, serverIP, clientIP, serverPort, clientPort, num_of_packetSent(server->client), TotalIPtrafficBytesSent(server->client), TotaluserTrafficBytesSent(server->client), sessionDuration, bps_IPlayerThroughput(server->client), bps_Goodput(server->client)\n"
+	                    "==================================================================================================================================\n";
 	///////////////////////
 	// open the input file
 	// open the output file
 
     FILE *fd_in, *fd_out;
-    unsigned int fileheader[6], pkt_header[NUM_PKT][4], captured_len;
-	// read file_header from the input file
+    unsigned int file_header[6], pkt_header[NUM_PKT][4], captured_len;
+    unsigned char one_pkt[NUM_PKT][MAX_PKT_LEN];
+    unsigned int src_port_num = 0;
+    unsigned int dst_port_num = 0;
+    unsigned int src_ip_1st_digit, src_ip_2nd_digit, src_ip_3rd_digit, src_ip_4th_digit;
+    unsigned int dst_ip_1st_digit, dst_ip_2nd_digit, dst_ip_3rd_digit, dst_ip_4th_digit;
+    double session_start_time = 0;
+    double session_end_time = 0;
+    double session_duration = 0;
+    unsigned int source_IP = 0;
+    unsigned int destination_IP = 0;
+
+    // read file_header from the input file
 	// copy the file header in to the output file
 
+    fd_in = fopen(in_filename, "rb");
+    if (fd_in < 0) {
+        perror("Unable to open input file");
+        exit(1);
+    }
+
+    fd_out = fopen(out_filename, "w+");
+    if (fd_out < 0 ) {
+        perror("Unable to open output file");
+    }
     
+    if (fread(file_header, sizeof(unsigned int), 6, fd_in) == 0) {
+        perror("File header Error");
+        exit(1);
+    }
 
-    /*
+    unsigned int header_len = strlen(txt_header);
 
-	while (!feof(fd_in))
-	{
+    fwrite(txt_header, sizeof(unsigned char),header_len, fd_out);
+    
+    fread(pkt_header[0], sizeof(unsigned int), 4, fd_in);
+    captured_len = pkt_header[0][2];
+
+    fread(&one_pkt[0][0], sizeof(unsigned char), captured_len, fd_in);
+
+    unsigned int session_count = 0;
+    unsigned int current_session = 0;
+    unsigned int num_of_packetSent = 0;
+    unsigned int TotalIPtrafficBytesSent = 0;
+    unsigned int TotaluserTrafficBytesSent = 0;
+    double bps_IPlayerThroughput = 0;
+    double bps_Goodput = 0;
+    while (!feof(fd_in)) {
 		// read one packet header
 		// extract capture_length info
 		// read one packet
+        fread(pkt_header[0], sizeof(unsigned int), 4, fd_in);
+        captured_len = pkt_header[0][2];
 
-		if (is this IP packet ?)
+        fread(&one_pkt[0][0], sizeof(unsigned char), captured_len, fd_in);
+
+        
+		if ((unsigned int)one_pkt[0][ETHER_PROTOCOL_TYPE_LOC] == 0x08)
 		{
-			if (is this TCP packet ?)
-			{
-				if (is this TCP SYN packet ?)
+			if ((unsigned int)one_pkt[0][TCP_TYPE_LOC] == TCP_TYPE_NUM)
+			{    
+                //is this TCP SYN packet ?
+				if (((unsigned int)one_pkt[0][47] & 2))
 				{
 					// this is starting of TCP sessionDuration
 					// So, record
@@ -400,20 +451,47 @@ void tcp_analysis(char *in_filename, char *out_filename)
 					// how to find source and destination port number? Here are two ways of doint it. You may use one of these or use your own way as well.
 					/////////////////////////////////
 					// method 1:
-					//src_port_num = (unsigned int)one_pkt[0][TCP_SRC_PORT];
-					//src_port_num = src_port_num << 8;
-					//src_port_num += (unsigned int)one_pkt[0][TCP_SRC_PORT+1];
-					// dst_port_num = (unsigned int)one_pkt[0][TCP_DST_PORT];
-					// dst_port_num = dst_port_num << 8;
-					// dst_port_num += (unsigned int)one_pkt[0][TCP_DST_PORT+1];
+					src_port_num = (unsigned int)one_pkt[0][TCP_SRC_PORT];
+					src_port_num = src_port_num << 8;
+					src_port_num += (unsigned int)one_pkt[0][TCP_SRC_PORT+1];
+					
+                    dst_port_num = (unsigned int)one_pkt[0][TCP_DST_PORT];
+					dst_port_num = dst_port_num << 8;
+					dst_port_num += (unsigned int)one_pkt[0][TCP_DST_PORT+1];
+                    
+                    src_ip_1st_digit = (unsigned int)one_pkt[0][26];
+                    src_ip_2nd_digit = (unsigned int)one_pkt[0][27];
+                    src_ip_3rd_digit = (unsigned int)one_pkt[0][28];
+                    src_ip_4th_digit = (unsigned int)one_pkt[0][29];
+                    dst_ip_1st_digit = (unsigned int)one_pkt[0][30];
+                    dst_ip_2nd_digit = (unsigned int)one_pkt[0][31];
+                    dst_ip_3rd_digit = (unsigned int)one_pkt[0][32];
+                    dst_ip_4th_digit = (unsigned int)one_pkt[0][33];
+
+                    tempArray[i] = dst_port_num;
+                    if (src_ip_1st_digit == 10 && src_ip_2nd_digit == 168 && src_ip_3rd_digit == 207 && src_ip_4th_digit == 106 
+                        && dst_ip_1st_digit == 192 && dst_ip_2nd_digit == 11 && dst_ip_3rd_digit == 68 && dst_ip_4th_digit == 196) {
+                        
+                        session_start_time = (double)pkt_header[0][0] + (((double)pkt_header[0][1]) / 1000000);
+
+                        if (tempArray[0] != tempArray[1]) 
+                            session_count++;       
+
+                    }
+
+                    current_session = session_count;
+                    //source_IP
+                    //destination_IP
 					/////////////////////////////////
 					// Method 2:
 					// src_port_num = bits_to_ui(memcpy(src_port_num_char,&one_pkt[0][TCP_SRC_PORT],2),2,0);
 					// dst_port_num = bits_to_ui(memcpy(dst_port_num_char,&one_pkt[0][TCP_DST_PORT],2),2,0);
 					/////////////////////////////////
-
-				}
-				else if (is this TCP FIN packet ?)
+                    i++;
+                    if (i > 1) 
+                        i = 0;
+                    }
+				else if (((unsigned int)one_pkt[0][47] & 1))
 				{
 					// This is the end of TCP session
 					// So, record
@@ -422,6 +500,22 @@ void tcp_analysis(char *in_filename, char *out_filename)
 					// You may record all TCP connection information in an array for later analysis
 					// and write in to a file at the end of the program
 
+                    if (current_session == session_count) { // same session
+                        session_end_time = (double)pkt_header[0][0] + (((double)pkt_header[0][1]) / 1000000);
+                        session_duration = session_end_time - session_start_time;
+                        bps_IPlayerThroughput = TotalIPtrafficBytesSent / session_duration;
+                        bps_Goodput = TotaluserTrafficBytesSent / session_duration;
+
+                        
+                        fprintf(fd_out, "%d\t%d.%d.%d.%d\t%d.%d.%d.%d\t%d\t%d\t%d\t%d\t%d\t%.5f\t%.5f\t%.5f\n",
+                        current_session, src_ip_1st_digit, src_ip_2nd_digit, src_ip_3rd_digit, src_ip_4th_digit, dst_ip_1st_digit, 
+                        dst_ip_2nd_digit, dst_ip_3rd_digit, dst_ip_4th_digit, src_port_num, dst_port_num, num_of_packetSent, 
+                        TotalIPtrafficBytesSent, TotaluserTrafficBytesSent, session_duration, bps_IPlayerThroughput, bps_IPlayerThroughput);
+                        
+                        num_of_packetSent = 0; // start counting number of packets
+                    }
+                    
+
 					// Now if you found the TCP SYN packet and FIN packet that belongs to the same TCP session, then you can calculate the TCP session duration
 					// TCP sessin duration =TCP FIN packet capture time - TCP SYN packet capture time.
 					// Careful. this TCP SYN and FIN packets are not just any SYN or FIN packet. These should be indicating the same TCP session.
@@ -429,6 +523,22 @@ void tcp_analysis(char *in_filename, char *out_filename)
 				}
 				else
 				{
+                    // sequence number ?
+                    unsigned int TCPpayload =  0;
+                    unsigned int IPheader = 0;
+                    unsigned int TCPheader = 0;
+
+                    if (current_session == session_count) {
+                        captured_len = pkt_header[0][2];
+                        IPheader = (pkt_header[0][1] & 0x0F);
+                        TCPheader = 4 * ((unsigned int)one_pkt[0][46] >> 4); // first 4 bits
+                        TCPpayload =  captured_len -  IPheader - TCPheader;
+
+                        num_of_packetSent++;
+                        TotalIPtrafficBytesSent += captured_len;
+                        TotaluserTrafficBytesSent += TCPpayload;
+                    }
+                    
 					// this is TCP data packet
 					// summing up the total captured byte size,
 					// calculate user data size and summing up until TCP session finishes
@@ -443,15 +553,20 @@ void tcp_analysis(char *in_filename, char *out_filename)
 			{
 				// this is not TCP packet so ignore
 			}
-		}
-		else
+            
+		} 
+        else
 		{
 			// this is not IP packet, so ignore
+
 		}
+
 	}	// end of WHILE (keep reading packets until the end of the file
 
+
 	// close both file here
-    */
+    fclose(fd_in);
+    fclose(fd_out);
 }
 
 
