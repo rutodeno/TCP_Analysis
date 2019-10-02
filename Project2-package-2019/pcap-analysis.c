@@ -425,6 +425,13 @@ void tcp_analysis(char *in_filename, char *out_filename)
     unsigned int TotaluserTrafficBytesSent = 0;
     double bps_IPlayerThroughput = 0;
     double bps_Goodput = 0;
+
+
+    
+    unsigned int TCPpayload =  0;
+    unsigned int IPheader = 0;
+    unsigned int TCPheader = 0;
+
     while (!feof(fd_in)) {
 		// read one packet header
 		// extract capture_length info
@@ -439,6 +446,12 @@ void tcp_analysis(char *in_filename, char *out_filename)
 		{
 			if ((unsigned int)one_pkt[0][TCP_TYPE_LOC] == TCP_TYPE_NUM)
 			{    
+
+                dst_ip_1st_digit = (unsigned int)one_pkt[0][30];
+                dst_ip_2nd_digit = (unsigned int)one_pkt[0][31];
+                dst_ip_3rd_digit = (unsigned int)one_pkt[0][32];
+                dst_ip_4th_digit = (unsigned int)one_pkt[0][33];
+
                 //is this TCP SYN packet ?
 				if (((unsigned int)one_pkt[0][47] & 2))
 				{
@@ -463,23 +476,21 @@ void tcp_analysis(char *in_filename, char *out_filename)
                     src_ip_2nd_digit = (unsigned int)one_pkt[0][27];
                     src_ip_3rd_digit = (unsigned int)one_pkt[0][28];
                     src_ip_4th_digit = (unsigned int)one_pkt[0][29];
-                    dst_ip_1st_digit = (unsigned int)one_pkt[0][30];
-                    dst_ip_2nd_digit = (unsigned int)one_pkt[0][31];
-                    dst_ip_3rd_digit = (unsigned int)one_pkt[0][32];
-                    dst_ip_4th_digit = (unsigned int)one_pkt[0][33];
-
+                    
                     tempArray[i] = dst_port_num;
-                    if (src_ip_1st_digit == 10 && src_ip_2nd_digit == 168 && src_ip_3rd_digit == 207 && src_ip_4th_digit == 106 
-                        && dst_ip_1st_digit == 192 && dst_ip_2nd_digit == 11 && dst_ip_3rd_digit == 68 && dst_ip_4th_digit == 196) {
+
+                    if ( dst_ip_1st_digit == 192 && dst_ip_2nd_digit == 11 && dst_ip_3rd_digit == 68 && dst_ip_4th_digit == 196 && tempArray[0] != tempArray[1] ) {
                         
                         session_start_time = (double)pkt_header[0][0] + (((double)pkt_header[0][1]) / 1000000);
-
-                        if (tempArray[0] != tempArray[1]) 
-                            session_count++;       
-
+                        session_count++;  
+                        //num_of_packetSent++;
+     
                     }
 
                     current_session = session_count;
+
+                    printf(" session count = %d \n", dst_port_num);
+
                     //source_IP
                     //destination_IP
 					/////////////////////////////////
@@ -490,6 +501,7 @@ void tcp_analysis(char *in_filename, char *out_filename)
                     i++;
                     if (i > 1) 
                         i = 0;
+                    
                     }
 				else if (((unsigned int)one_pkt[0][47] & 1))
 				{
@@ -500,7 +512,8 @@ void tcp_analysis(char *in_filename, char *out_filename)
 					// You may record all TCP connection information in an array for later analysis
 					// and write in to a file at the end of the program
 
-                    if (current_session == session_count) { // same session
+                    if (dst_ip_1st_digit == 192 && dst_ip_2nd_digit == 11 && dst_ip_3rd_digit == 68 && dst_ip_4th_digit == 196 && current_session == session_count ) { // same session
+                        num_of_packetSent++;
                         session_end_time = (double)pkt_header[0][0] + (((double)pkt_header[0][1]) / 1000000);
                         session_duration = session_end_time - session_start_time;
                         bps_IPlayerThroughput = TotalIPtrafficBytesSent / session_duration;
@@ -513,6 +526,8 @@ void tcp_analysis(char *in_filename, char *out_filename)
                         TotalIPtrafficBytesSent, TotaluserTrafficBytesSent, session_duration, bps_IPlayerThroughput, bps_IPlayerThroughput);
                         
                         num_of_packetSent = 0; // start counting number of packets
+                        TotalIPtrafficBytesSent = 0;
+                        TotaluserTrafficBytesSent = 0;
                     }
                     
 
@@ -524,17 +539,16 @@ void tcp_analysis(char *in_filename, char *out_filename)
 				else
 				{
                     // sequence number ?
-                    unsigned int TCPpayload =  0;
-                    unsigned int IPheader = 0;
-                    unsigned int TCPheader = 0;
 
-                    if (current_session == session_count) {
+
+                    if ( dst_ip_1st_digit == 192 && dst_ip_2nd_digit == 11 && dst_ip_3rd_digit == 68 && dst_ip_4th_digit == 196 && (current_session == session_count) ) {
+                        
+                        num_of_packetSent++; 
                         captured_len = pkt_header[0][2];
                         IPheader = (pkt_header[0][1] & 0x0F);
-                        TCPheader = 4 * ((unsigned int)one_pkt[0][46] >> 4); // first 4 bits
+                        TCPheader = 4 * ((unsigned int)one_pkt[0][46] >> 4);
                         TCPpayload =  captured_len -  IPheader - TCPheader;
 
-                        num_of_packetSent++;
                         TotalIPtrafficBytesSent += captured_len;
                         TotaluserTrafficBytesSent += TCPpayload;
                     }
